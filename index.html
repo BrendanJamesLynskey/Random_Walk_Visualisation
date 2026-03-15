@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Random Walk &amp; Brownian Motion Visualisation</title>
+<script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+<style>
+:root {
+  --bg: #0f0f13;
+  --surface: #1a1a24;
+  --border: #2a2a3a;
+  --text: #e0e0e8;
+  --muted: #8888a0;
+  --accent: #6c8cff;
+  --accent2: #ff6c8c;
+  --accent3: #6cffc8;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+header {
+  text-align: center;
+  padding: 2rem 1rem 1rem;
+  background: linear-gradient(180deg, #14141c 0%, var(--bg) 100%);
+  border-bottom: 1px solid var(--border);
+}
+header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent2), var(--accent3));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: .35rem;
+}
+header p { color: var(--muted); font-size: .95rem; max-width: 640px; margin: 0 auto; }
+
+.container { max-width: 1360px; margin: 0 auto; padding: 1.25rem; }
+
+/* Mode selector pills */
+.mode-bar {
+  display: flex; flex-wrap: wrap; gap: .5rem;
+  justify-content: center; margin-bottom: 1.25rem;
+}
+.pill {
+  padding: .45rem 1rem; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--muted); cursor: pointer; font-size: .85rem;
+  transition: all .2s;
+}
+.pill:hover { border-color: var(--accent); color: var(--text); }
+.pill.active {
+  background: var(--accent); color: #fff;
+  border-color: var(--accent); box-shadow: 0 0 12px rgba(108,140,255,.35);
+}
+
+/* Cards */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;
+}
+.card h2 {
+  font-size: 1.05rem; font-weight: 600; margin-bottom: .75rem;
+  color: var(--accent);
+}
+
+/* Controls */
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+.control-group label {
+  display: block; font-size: .8rem; color: var(--muted);
+  margin-bottom: .25rem;
+}
+.control-group input[type=range] {
+  width: 100%; accent-color: var(--accent);
+}
+.control-group .val {
+  font-size: .85rem; color: var(--accent); font-weight: 600;
+  float: right;
+}
+.btn-bar { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+.btn {
+  padding: .5rem 1.4rem; border-radius: 8px; border: none;
+  font-size: .9rem; font-weight: 600; cursor: pointer;
+  transition: all .2s;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { box-shadow: 0 0 16px rgba(108,140,255,.45); }
+.btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); }
+.btn-danger { background: var(--accent2); color: #fff; }
+.btn-danger:hover { box-shadow: 0 0 16px rgba(255,108,140,.45); }
+
+/* Plots grid */
+.plots-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+.plots-grid .card.full { grid-column: 1 / -1; }
+.plot-box { width: 100%; min-height: 400px; }
+
+/* Stats */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: .75rem;
+}
+.stat-item {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: .75rem; text-align: center;
+}
+.stat-item .stat-label { font-size: .75rem; color: var(--muted); }
+.stat-item .stat-value { font-size: 1.2rem; font-weight: 700; color: var(--accent3); }
+
+/* Equation */
+.equation {
+  text-align: center; padding: .75rem;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; margin-top: .75rem;
+  font-size: .95rem; color: var(--muted);
+  font-style: italic;
+}
+
+@media (max-width: 800px) {
+  .plots-grid { grid-template-columns: 1fr; }
+  header h1 { font-size: 1.5rem; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Random Walk &amp; Brownian Motion</h1>
+  <p>Explore stochastic processes: from discrete random walks to continuous Brownian motion, Levy flights, and self-avoiding walks.</p>
+</header>
+
+<div class="container">
+  <!-- Mode selector -->
+  <div class="mode-bar" id="modeBar">
+    <button class="pill active" data-mode="1d">1D Random Walk</button>
+    <button class="pill" data-mode="2d">2D Random Walk</button>
+    <button class="pill" data-mode="bm1d">1D Brownian Motion</button>
+    <button class="pill" data-mode="bm2d">2D Brownian Motion</button>
+    <button class="pill" data-mode="levy">Levy Flight</button>
+    <button class="pill" data-mode="saw">Self-Avoiding Walk</button>
+  </div>
+
+  <!-- Controls -->
+  <div class="card">
+    <h2>Controls</h2>
+    <div class="controls-grid">
+      <div class="control-group">
+        <label>Number of Steps <span class="val" id="stepsVal">500</span></label>
+        <input type="range" id="stepsSlider" min="10" max="10000" value="500" step="10">
+      </div>
+      <div class="control-group">
+        <label>Simultaneous Walks <span class="val" id="walksVal">3</span></label>
+        <input type="range" id="walksSlider" min="1" max="20" value="3">
+      </div>
+      <div class="control-group">
+        <label>Step Size <span class="val" id="stepSizeVal">1.0</span></label>
+        <input type="range" id="stepSizeSlider" min="0.1" max="5" value="1" step="0.1">
+      </div>
+      <div class="control-group">
+        <label>Animation Speed <span class="val" id="speedVal">50</span></label>
+        <input type="range" id="speedSlider" min="1" max="200" value="50">
+      </div>
+    </div>
+    <div class="btn-bar">
+      <button class="btn btn-primary" id="btnWalk">Walk</button>
+      <button class="btn btn-secondary" id="btnAnimate">Animate</button>
+      <button class="btn btn-danger" id="btnReset">Reset</button>
+    </div>
+  </div>
+
+  <!-- Statistics -->
+  <div class="card">
+    <h2>Statistics</h2>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-item"><div class="stat-label">Mean Displacement</div><div class="stat-value" id="statMean">--</div></div>
+      <div class="stat-item"><div class="stat-label">RMS Displacement</div><div class="stat-value" id="statRMS">--</div></div>
+      <div class="stat-item"><div class="stat-label">Max Displacement</div><div class="stat-value" id="statMax">--</div></div>
+      <div class="stat-item"><div class="stat-label">Theoretical RMS (sqrt(n))</div><div class="stat-value" id="statTheo">--</div></div>
+      <div class="stat-item"><div class="stat-label">Diffusion Coeff D</div><div class="stat-value" id="statD">--</div></div>
+      <div class="stat-item"><div class="stat-label">Walks Completed</div><div class="stat-value" id="statCount">0</div></div>
+    </div>
+    <div class="equation" id="eqnBox">
+      Connection to the Heat Equation: &nbsp; &part;u/&part;t = D &nabla;&sup2;u &nbsp;&mdash;&nbsp;
+      The probability density of a random walker satisfies the diffusion (heat) equation as step size &rarr; 0.
+    </div>
+  </div>
+
+  <!-- Plots -->
+  <div class="plots-grid">
+    <div class="card full">
+      <h2 id="mainPlotTitle">Position vs Time</h2>
+      <div class="plot-box" id="mainPlot"></div>
+    </div>
+    <div class="card">
+      <h2>Displacement&sup2; vs Time</h2>
+      <div class="plot-box" id="dispPlot"></div>
+    </div>
+    <div class="card">
+      <h2 id="histTitle">Final Position Histogram</h2>
+      <div class="plot-box" id="histPlot"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ── state ── */
+let mode = '1d';
+let walks = [];          // array of walk objects
+let animId = null;       // animation handle
+let animStep = 0;
+let animWalks = null;
+
+const $ = id => document.getElementById(id);
+const plotLayout = (title, xlab, ylab, extra) => Object.assign({
+  paper_bgcolor: '#1a1a24', plot_bgcolor: '#14141c',
+  font: { color: '#e0e0e8', family: "'Segoe UI', system-ui, sans-serif" },
+  title: { text: title, font: { size: 14 } },
+  xaxis: { title: xlab, gridcolor: '#2a2a3a', zerolinecolor: '#2a2a3a' },
+  yaxis: { title: ylab, gridcolor: '#2a2a3a', zerolinecolor: '#2a2a3a' },
+  margin: { t: 40, r: 20, b: 50, l: 55 },
+  showlegend: false,
+}, extra || {});
+
+const walkColors = [
+  '#6c8cff','#ff6c8c','#6cffc8','#ffc86c','#c86cff',
+  '#ff9f43','#54a0ff','#5f27cd','#01a3a4','#f368e0',
+  '#ee5a24','#7bed9f','#70a1ff','#eccc68','#ff6b81',
+  '#a29bfe','#fd79a8','#00cec9','#e17055','#81ecec'
+];
+
+/* ── sliders ── */
+const sliders = [
+  ['stepsSlider','stepsVal'], ['walksSlider','walksVal'],
+  ['stepSizeSlider','stepSizeVal'], ['speedSlider','speedVal']
+];
+sliders.forEach(([s,v]) => {
+  $(s).addEventListener('input', () => { $(v).textContent = $(s).value; });
+});
+
+/* ── mode selector ── */
+$('modeBar').addEventListener('click', e => {
+  const pill = e.target.closest('.pill');
+  if (!pill) return;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  pill.classList.add('active');
+  mode = pill.dataset.mode;
+  resetAll();
+  updateTitles();
+});
+
+function updateTitles() {
+  const is2d = mode === '2d' || mode === 'bm2d' || mode === 'levy' || mode === 'saw';
+  $('mainPlotTitle').textContent = is2d ? 'Walk Paths (X-Y)' : 'Position vs Time';
+  $('histTitle').textContent = is2d ? 'Final Distance Histogram' : 'Final Position Histogram';
+}
+
+/* ── walk generators ── */
+function generate1D(n, s) {
+  const x = [0];
+  for (let i = 1; i <= n; i++) x.push(x[i-1] + (Math.random() < 0.5 ? s : -s));
+  return { x, dim: 1 };
+}
+
+function generate2D(n, s) {
+  const x = [0], y = [0];
+  const dirs = [[s,0],[-s,0],[0,s],[0,-s]];
+  for (let i = 1; i <= n; i++) {
+    const d = dirs[Math.floor(Math.random()*4)];
+    x.push(x[i-1]+d[0]); y.push(y[i-1]+d[1]);
+  }
+  return { x, y, dim: 2 };
+}
+
+function generateBM1D(n, s) {
+  const dt = s * s;
+  const x = [0];
+  for (let i = 1; i <= n; i++) {
+    x.push(x[i-1] + gaussRand() * Math.sqrt(dt));
+  }
+  return { x, dim: 1 };
+}
+
+function generateBM2D(n, s) {
+  const dt = s * s;
+  const x = [0], y = [0];
+  for (let i = 1; i <= n; i++) {
+    x.push(x[i-1] + gaussRand() * Math.sqrt(dt));
+    y.push(y[i-1] + gaussRand() * Math.sqrt(dt));
+  }
+  return { x, y, dim: 2 };
+}
+
+function generateLevy(n, s) {
+  const x = [0], y = [0];
+  for (let i = 1; i <= n; i++) {
+    // Cauchy-distributed step length (heavy tail)
+    const r = Math.abs(s * Math.tan(Math.PI * (Math.random() - 0.5)));
+    const clampedR = Math.min(r, 50 * s); // clamp extreme outliers for visual sanity
+    const theta = Math.random() * 2 * Math.PI;
+    x.push(x[i-1] + clampedR * Math.cos(theta));
+    y.push(y[i-1] + clampedR * Math.sin(theta));
+  }
+  return { x, y, dim: 2 };
+}
+
+function generateSAW(n, s) {
+  const x = [0], y = [0];
+  const visited = new Set(['0,0']);
+  const dirs = [[s,0],[-s,0],[0,s],[0,-s]];
+  let cx = 0, cy = 0;
+  for (let i = 0; i < n; i++) {
+    // shuffle directions
+    const order = [0,1,2,3].sort(() => Math.random()-0.5);
+    let moved = false;
+    for (const di of order) {
+      const nx = cx + dirs[di][0], ny = cy + dirs[di][1];
+      const key = nx.toFixed(4)+','+ny.toFixed(4);
+      if (!visited.has(key)) {
+        visited.add(key);
+        cx = nx; cy = ny;
+        x.push(cx); y.push(cy);
+        moved = true;
+        break;
+      }
+    }
+    if (!moved) break; // stuck
+  }
+  return { x, y, dim: 2 };
+}
+
+function gaussRand() {
+  // Box-Muller
+  let u, v;
+  do { u = Math.random(); } while (u === 0);
+  v = Math.random();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+function generateWalk() {
+  const n = +$('stepsSlider').value;
+  const s = +$('stepSizeSlider').value;
+  switch (mode) {
+    case '1d':   return generate1D(n, s);
+    case '2d':   return generate2D(n, s);
+    case 'bm1d': return generateBM1D(n, s);
+    case 'bm2d': return generateBM2D(n, s);
+    case 'levy': return generateLevy(n, s);
+    case 'saw':  return generateSAW(n, s);
+  }
+}
+
+/* ── colour gradient helper ── */
+function timeGradient(len, baseColor) {
+  // blend baseColor -> warm reddish over time
+  const colors = [];
+  for (let i = 0; i < len; i++) {
+    const t = len > 1 ? i / (len - 1) : 0;
+    // HSL interpolation: start at hue of base, end at red-ish
+    const h0 = 220, h1 = 0; // blue -> red
+    const h = h0 + (h1 - h0) * t;
+    const s = 75 + 10 * t;
+    const l = 55 + 10 * t;
+    colors.push(`hsl(${h},${s}%,${l}%)`);
+  }
+  return colors;
+}
+
+/* ── plotting ── */
+function plotAll(walksData) {
+  const is2d = walksData.length > 0 && walksData[0].dim === 2;
+  plotMain(walksData, is2d);
+  plotDisp(walksData, is2d);
+  plotHist(walksData, is2d);
+  updateStats(walksData, is2d);
+}
+
+function plotMain(walksData, is2d) {
+  const traces = [];
+  const n = walksData.length > 0 ? walksData[0].x.length : 0;
+  const s = +$('stepSizeSlider').value;
+
+  walksData.forEach((w, wi) => {
+    const len = w.x.length;
+    if (is2d) {
+      // coloured segments via markers+lines
+      traces.push({
+        x: w.x, y: w.y,
+        mode: 'lines+markers',
+        line: { color: walkColors[wi % walkColors.length], width: 1.5 },
+        marker: {
+          color: Array.from({length: len}, (_, i) => i),
+          colorscale: [[0,'#6c8cff'],[0.5,'#c86cff'],[1,'#ff6c8c']],
+          size: 2, showscale: wi === 0,
+          colorbar: wi === 0 ? { title: 'Step', thickness: 12, len: 0.5 } : undefined
+        },
+        opacity: 0.85,
+        name: `Walk ${wi+1}`
+      });
+      // start/end markers
+      traces.push({
+        x: [w.x[0]], y: [w.y[0]], mode: 'markers',
+        marker: { color: '#6cffc8', size: 8, symbol: 'circle' },
+        showlegend: false
+      });
+      traces.push({
+        x: [w.x[len-1]], y: [w.y[len-1]], mode: 'markers',
+        marker: { color: '#ff6c8c', size: 8, symbol: 'x' },
+        showlegend: false
+      });
+    } else {
+      const t = Array.from({length: len}, (_, i) => i);
+      traces.push({
+        x: t, y: w.x,
+        mode: 'lines+markers',
+        line: { color: walkColors[wi % walkColors.length], width: 1.5 },
+        marker: {
+          color: t,
+          colorscale: [[0,'#6c8cff'],[0.5,'#c86cff'],[1,'#ff6c8c']],
+          size: 1.5, showscale: wi === 0,
+          colorbar: wi === 0 ? { title: 'Step', thickness: 12, len: 0.5 } : undefined
+        },
+        opacity: 0.85,
+        name: `Walk ${wi+1}`
+      });
+    }
+  });
+
+  // Diffusion envelope
+  if (walksData.length > 0 && (mode === '1d' || mode === 'bm1d')) {
+    const D = s * s / 2;
+    const nSteps = walksData[0].x.length;
+    const t = Array.from({length: nSteps}, (_, i) => i);
+    const envUp = t.map(ti => Math.sqrt(2 * D * ti));
+    const envDn = t.map(ti => -Math.sqrt(2 * D * ti));
+    traces.push({
+      x: t, y: envUp, mode: 'lines',
+      line: { color: '#6cffc8', width: 2, dash: 'dash' },
+      name: '+sqrt(2Dt)'
+    });
+    traces.push({
+      x: t, y: envDn, mode: 'lines',
+      line: { color: '#6cffc8', width: 2, dash: 'dash' },
+      name: '-sqrt(2Dt)'
+    });
+  }
+
+  if (walksData.length > 0 && (mode === '2d' || mode === 'bm2d')) {
+    const D = s * s / 2;
+    const nSteps = walksData[0].x.length - 1;
+    const R = Math.sqrt(4 * D * nSteps);
+    const theta = Array.from({length: 101}, (_, i) => i * 2 * Math.PI / 100);
+    traces.push({
+      x: theta.map(a => R * Math.cos(a)),
+      y: theta.map(a => R * Math.sin(a)),
+      mode: 'lines',
+      line: { color: '#6cffc8', width: 2, dash: 'dash' },
+      name: 'sqrt(4Dt) envelope'
+    });
+  }
+
+  const layout = is2d
+    ? plotLayout('', 'X', 'Y', { yaxis: { scaleanchor: 'x', scaleratio: 1, gridcolor: '#2a2a3a', zerolinecolor:'#2a2a3a' } })
+    : plotLayout('', 'Step', 'Position');
+
+  Plotly.react('mainPlot', traces, layout, { responsive: true });
+}
+
+function plotDisp(walksData, is2d) {
+  if (walksData.length === 0) {
+    Plotly.react('dispPlot', [], plotLayout('', 'Step', 'Displacement²'), { responsive: true });
+    return;
+  }
+  const maxLen = Math.max(...walksData.map(w => w.x.length));
+  // mean displacement² at each time
+  const meanD2 = [];
+  for (let t = 0; t < maxLen; t++) {
+    let sum = 0, count = 0;
+    walksData.forEach(w => {
+      if (t < w.x.length) {
+        if (is2d) sum += w.x[t]*w.x[t] + w.y[t]*w.y[t];
+        else sum += w.x[t]*w.x[t];
+        count++;
+      }
+    });
+    meanD2.push(count > 0 ? sum / count : 0);
+  }
+  const tArr = Array.from({length: maxLen}, (_, i) => i);
+  const s = +$('stepSizeSlider').value;
+  const D = s * s / 2;
+  const dims = is2d ? 2 : 1;
+  const theo = tArr.map(t => 2 * dims * D * t);
+
+  const traces = [
+    { x: tArr, y: meanD2, mode: 'lines', line: { color: '#6c8cff', width: 2 }, name: 'Mean <r²>' },
+    { x: tArr, y: theo, mode: 'lines', line: { color: '#6cffc8', width: 2, dash: 'dash' }, name: `${2*dims}Dt (theory)` }
+  ];
+  Plotly.react('dispPlot', traces, plotLayout('', 'Step', '<r²>',{ showlegend: true, legend:{font:{size:11}} }), { responsive: true });
+}
+
+function plotHist(walksData, is2d) {
+  if (walksData.length < 2) {
+    Plotly.react('histPlot', [], plotLayout('', is2d ? 'Final Distance' : 'Final Position', 'Count'), { responsive: true });
+    return;
+  }
+  let finals;
+  if (is2d) {
+    finals = walksData.map(w => {
+      const last = w.x.length - 1;
+      return Math.sqrt(w.x[last]**2 + w.y[last]**2);
+    });
+  } else {
+    finals = walksData.map(w => w.x[w.x.length - 1]);
+  }
+  const traces = [{
+    x: finals, type: 'histogram',
+    marker: { color: 'rgba(108,140,255,0.6)', line: { color: '#6c8cff', width: 1 } },
+    nbinsx: Math.max(8, Math.min(40, Math.ceil(Math.sqrt(finals.length)))),
+    name: 'Observed'
+  }];
+
+  // Gaussian overlay for 1D
+  if (!is2d && finals.length >= 5) {
+    const mean = finals.reduce((a,b) => a+b, 0) / finals.length;
+    const variance = finals.reduce((a,b) => a + (b-mean)**2, 0) / finals.length;
+    const sigma = Math.sqrt(variance);
+    if (sigma > 0) {
+      const lo = Math.min(...finals), hi = Math.max(...finals);
+      const pad = (hi - lo) * 0.15 || 5;
+      const xs = Array.from({length: 100}, (_, i) => lo - pad + (hi - lo + 2*pad) * i / 99);
+      const binWidth = (hi - lo) / Math.max(8, Math.ceil(Math.sqrt(finals.length)));
+      const ys = xs.map(x => {
+        const z = (x - mean) / sigma;
+        return finals.length * binWidth * Math.exp(-z*z/2) / (sigma * Math.sqrt(2*Math.PI));
+      });
+      traces.push({
+        x: xs, y: ys, mode: 'lines',
+        line: { color: '#ff6c8c', width: 2.5 },
+        name: 'Gaussian fit'
+      });
+    }
+  }
+
+  Plotly.react('histPlot', traces,
+    plotLayout('', is2d ? 'Final Distance' : 'Final Position', 'Count', { showlegend: true, legend:{font:{size:11}}, bargap: 0.05 }),
+    { responsive: true }
+  );
+}
+
+function updateStats(walksData, is2d) {
+  if (walksData.length === 0) {
+    ['statMean','statRMS','statMax','statTheo','statD'].forEach(id => $(id).textContent = '--');
+    $('statCount').textContent = '0';
+    return;
+  }
+  const s = +$('stepSizeSlider').value;
+  const disps = walksData.map(w => {
+    const last = w.x.length - 1;
+    if (is2d) return Math.sqrt(w.x[last]**2 + w.y[last]**2);
+    return w.x[last];
+  });
+  const absd = disps.map(Math.abs);
+  const mean = disps.reduce((a,b) => a+b, 0) / disps.length;
+  const rms = Math.sqrt(disps.reduce((a,b) => a+b*b, 0) / disps.length);
+  const maxD = Math.max(...absd);
+  const nSteps = walksData[0].x.length - 1;
+  const D = s * s / 2;
+  const theoRMS = s * Math.sqrt(nSteps);
+
+  $('statMean').textContent = mean.toFixed(3);
+  $('statRMS').textContent = rms.toFixed(3);
+  $('statMax').textContent = maxD.toFixed(3);
+  $('statTheo').textContent = theoRMS.toFixed(3);
+  $('statD').textContent = D.toFixed(4);
+  $('statCount').textContent = walksData.length;
+}
+
+/* ── actions ── */
+function runWalk() {
+  stopAnim();
+  const nw = +$('walksSlider').value;
+  for (let i = 0; i < nw; i++) walks.push(generateWalk());
+  plotAll(walks);
+}
+
+function runAnimate() {
+  stopAnim();
+  const nw = +$('walksSlider').value;
+  animWalks = [];
+  for (let i = 0; i < nw; i++) animWalks.push(generateWalk());
+  animStep = 1;
+  stepAnimate();
+}
+
+function stepAnimate() {
+  const speed = +$('speedSlider').value;
+  const maxLen = Math.max(...animWalks.map(w => w.x.length));
+  if (animStep >= maxLen) {
+    // finished: push full walks into history
+    animWalks.forEach(w => walks.push(w));
+    animWalks = null;
+    plotAll(walks);
+    return;
+  }
+  // build partial walks
+  const partial = animWalks.map(w => {
+    const end = Math.min(animStep, w.x.length);
+    const p = { x: w.x.slice(0, end), dim: w.dim };
+    if (w.dim === 2) p.y = w.y.slice(0, end);
+    return p;
+  });
+  const combined = walks.concat(partial);
+  plotAll(combined);
+  const stepsPerFrame = Math.max(1, Math.floor(speed / 10));
+  animStep += stepsPerFrame;
+  animId = requestAnimationFrame(stepAnimate);
+}
+
+function stopAnim() {
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+  if (animWalks) {
+    animWalks.forEach(w => walks.push(w));
+    animWalks = null;
+  }
+}
+
+function resetAll() {
+  stopAnim();
+  walks = [];
+  plotAll([]);
+}
+
+$('btnWalk').addEventListener('click', runWalk);
+$('btnAnimate').addEventListener('click', runAnimate);
+$('btnReset').addEventListener('click', resetAll);
+
+/* ── init ── */
+updateTitles();
+plotAll([]);
+})();
+</script>
+</body>
+</html>
